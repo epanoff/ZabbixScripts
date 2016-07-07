@@ -18,6 +18,10 @@ parser.add_option('-g', '--group',
 parser.add_option('-i', '--item',
                   dest='item',
                   help='Zabbix item name')
+parser.add_option('-t', '--template',
+                  dest='template',
+                  help='Zabbix template name')
+
 (options, args) = parser.parse_args()
 if options.zabbix_host is None:
     parser.error('Zabbix hostname not given')
@@ -27,8 +31,8 @@ elif options.password is None:
     parser.error('Password not given')
 elif options.group is None:
     parser.error('Group not given')
-elif options.item is None:
-    parser.error('Item not given')
+elif options.item or options.template is None:
+    parser.error('Item name  or template name  not given')
 
 colors = ["C80000", "00C800", "0000C8", "C800C8",
           "00C8C8",  "C8C800", "C8C8C8", "960096",
@@ -42,33 +46,92 @@ def create_list(list):
     lst = []
     for pn in list:
         d = {}
-        d['itemid']=pn
-        d['color']=colors[i]
+        d['itemid'] = pn
+        d['color'] = colors[i]
         i += 1
         lst.append(d)
     return lst
 
-print "Connecting to " + options.zabbix_host
 
-zapi = ZabbixAPI(url=options.zabbix_host, user=options.user, password=options.password)
+def connect_to_host(host, user, password):
+    print "Connecting to " + host
+    api = ZabbixAPI(url=host, user=user, password=password)
+    return api
 
-print "Get items from item: \"" + options.item + "\" on group: \"" + options.group + "\""
-result1 = zapi.do_request('item.get',
-                          {
-                              'filter': {'name': options.item},
-                              'output': 'extend',
-                              'group' : options.group
-                          })
 
-graph_color_json = create_list([itemid['itemid'] for itemid in result1['result']])
+def get_items_by_name(api, template):
+    print "Get template_id from template: \"" + template + "\""
+    result = api.do_request('item.get',
+                              {
+                                  'filter': {'name': item},
+                                  'output': 'extend',
+                                  'group': group
+                              })
+    return result
 
-print "Creating graph \"" + options.item + "\" on group: \"" + options.group + "\""
-params = {
-                            'name': options.item,
-                            'width': 900,
-                            'height': 200,
-                            'gitems': graph_color_json
-                           }
 
-zapi.do_request('graph.create', params)
-print "Ok"
+def get_id_by_template_name(api, template):
+    print "Get items from template: \"" + template + "\""
+    result = api.do_request('template.get',
+                              {
+                                  'filter': {'host': template},
+                                  'output': 'extend'
+                              })
+    result = [templateid['templateid'] for templateid in result['result']]
+    return result[0]
+
+
+def get_items_by_name_on_group(api, item, group):
+    print "Get items from item: \"" + item + "\" on group: \"" + group + "\""
+    result = api.do_request('item.get',
+                              {
+                                  'filter': {'name': item},
+                                  'output': 'extend',
+                                  'group': group
+                              })
+    return result
+
+
+def get_item_names_by_name_template(api, t_id):
+    print "Get items from template id \"" + t_id + "\""
+    result = api.do_request('item.get',
+                              {
+                                  'output': 'extend',
+                                  'templateids': t_id
+                              })
+    return [item_name['name'] for item_name in result['result']]
+
+
+def get_color_json(list_of_items):
+    result_list = create_list([itemid['itemid'] for itemid in list_of_items['result']])
+    return result_list
+
+
+def create_graph(api, item, group, gitems_list):
+    print "Creating graph \"" + item + "\" on group: \"" + group + "\""
+    params = {
+                                'name': item,
+                                'width': 900,
+                                'height': 200,
+                                'gitems': gitems_list
+                               }
+    api.do_request('graph.create', params)
+    print "Ok"
+
+
+zab_api = connect_to_host(options.zabbix_host, options.user, options.password)
+if options.template is None:
+    list_items = get_items_by_name_on_group(zab_api, options.item, options.group)
+    graph_color_list = get_color_json(list_items)
+    create_graph(zab_api, options.item, options.group, graph_color_list)
+else:
+    template_id = get_id_by_template_name(zab_api, options.template)
+    items_names = get_item_names_by_name_template(zab_api, template_id)
+    for item_name in items_names:
+            list_items = get_items_by_name_on_group(zab_api, item_name, options.group)
+            graph_color_list = get_color_json(list_items)
+            try:
+                create_graph(zab_api, item_name, options.group, graph_color_list)
+            except Exception as detail:
+                print "Cannot create graph \"" + item_name + "\"\n", detail
+print "All done"
