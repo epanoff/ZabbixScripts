@@ -1,5 +1,9 @@
 # ZabbixScripts
 
+Need Zabbix modules for Python with pip:
+
+pip install py-zabbix
+
 ##create_graph.py
 
 Is is script for creating graph by item on different hosts in same hostgroup.
