@@ -31,7 +31,7 @@ elif options.password is None:
     parser.error('Password not given')
 elif options.group is None:
     parser.error('Group not given')
-elif options.item or options.template is None:
+elif (options.item is None) and (options.template is None):
     parser.error('Item name  or template name  not given')
 
 colors = ["C80000", "00C800", "0000C8", "C800C8",
