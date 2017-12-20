@@ -89,6 +89,7 @@ def get_items_by_name_on_group(api, item, group):
                                   'output': 'extend',
                                   'group': group
                               })
+
     return result
 
 
